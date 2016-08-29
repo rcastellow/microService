@@ -1,0 +1,115 @@
+group 'com.pac.sample'
+version '1.0'
+
+apply plugin: 'java'
+apply plugin: 'com.bmuschko.docker-remote-api'
+apply plugin: 'spring-boot'
+apply plugin: 'eclipse'
+apply plugin: 'idea'
+
+
+
+import com.bmuschko.gradle.docker.tasks.image.DockerBuildImage
+
+sourceCompatibility = 1.8
+
+repositories {
+    mavenLocal()
+    maven { url 'http://repo.grails.org/grails/repo' }
+    mavenCentral()
+    maven { url "https://repository.jboss.org/nexus/content/repositories/releases" }
+}
+
+buildscript {
+    repositories {
+        mavenCentral()
+        maven {
+            url "https://repository.jboss.org/nexus/content/repositories/releases"
+        }
+        maven {
+            url "https://plugins.gradle.org/m2/"
+        }
+    }
+    dependencies {
+        classpath "com.bmuschko:gradle-docker-plugin:3.0.2"
+        classpath("org.springframework.boot:spring-boot-gradle-plugin:1.4.0.RELEASE")
+    }
+}
+
+jar {
+    baseName = 'microservice'
+    version = '1.0'
+}
+
+sourceCompatibility = 1.8
+targetCompatibility = 1.8
+
+dependencies {
+//    compile 'org.hibernate:hibernate-core:5.1.0.Final'
+//    compile 'org.springframework.data:spring-data-jpa'
+    compile 'org.apache.commons:commons-lang3:3.0'
+    compile 'org.springframework.boot:spring-boot-starter-web'
+    compile 'org.springframework.boot:spring-boot-starter-actuator'
+    compile 'org.springframework.boot:spring-boot-starter-data-jpa'
+    compile 'com.h2database:h2'
+    compile 'com.fasterxml.jackson.core:jackson-databind'
+    compile 'com.google.guava:guava:19.0'
+    compile 'io.springfox:springfox-swagger2:2.5.0'
+    compile 'io.springfox:springfox-swagger-ui:2.5.0'
+
+    testCompile("org.springframework.boot:spring-boot-starter-test")
+    testCompile("junit:junit")
+}
+
+task copyJar(type: Copy) {
+    dependsOn 'jar'
+    from "build/libs/microservice-${project.version}.jar"
+    into 'build/docker'
+    rename { String fileName ->
+        fileName.replace("-${project.version}", "")
+    }
+}
+
+task buildDockerImage(type: DockerBuildImage) {
+    dependsOn copyJar
+    if (System.env.DOCKER_HOST) {
+        // This is a workaround for the following issue https://plus.google.com/114652266796275994051/posts/7dZh5DqSqGi
+        url = "$System.env.DOCKER_HOST".replace("tcp", "https")
+        if (System.env.DOCKER_CERT_PATH) {
+            certPath = new File(System.env.DOCKER_CERT_PATH)
+
+        }
+    } else {
+        // url = 'unix:///var/run/docker.sock'
+        // For MAC use this
+        url = 'unix:///var/tmp/docker.sock'
+    }
+    inputDir = file("${projectDir}")
+    tag = "sample/${project.name}:${project.version}"
+}
+
+task buildContainerImage(type: Exec) {
+        dependsOn buildDockerImage
+        commandLine "docker", "build", "-t", "samplerepos/microservice", "."
+}
+
+task startDockerImage (type: Exec) {
+    dependsOn buildContainerImage
+    commandLine "docker", "run", "-p 80:80", "-d", "--name", "microservice" "samplerepos"
+}
+task wrapper(type: Wrapper) {
+    gradleVersion = '2.3'
+}
+
+// Used only to build the source directories when starting this project
+task "create-dirs" << {
+    sourceSets*.java.srcDirs*.each { it.mkdirs() }
+    sourceSets*.resources.srcDirs*.each { it.mkdirs() }
+}
+
+build.dependsOn runDockerContainer
+build.dependsOn pushDockerImage
+build.dependsOn createDockerContainer
+build.dependsOn tagDockerImage
+build.dependsOn buildDockerImage
+build.dependsOn copyJar

@@ -1,0 +1,14 @@
+
+Install Docker and Docker Toolkit
+
+docker run -d -p 5000:5000 --restart=always --name registry registry:2
+
+1. Set the following environment variables:
+    DOCKER_HOST=tcp://192.168.99.100:2376
+    DOCKER_MACHINE_NAME=default
+    DOCKER_TLS_VERIFY=1
+    DOCKER_CERT_PATH=/Users/RobCastellow/.docker/machine/machines/default
+
+
+
+2. Go to http://192.168.99.100:32768/swagger-ui.html for Swagger API information
